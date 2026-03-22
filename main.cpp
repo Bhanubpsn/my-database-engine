@@ -76,8 +76,8 @@ public:
 class Row {
 public:
     uint32_t id;
-    char username[COLUMN_USERNAME_SIZE];
-    char email[COLUMN_EMAIL_SIZE];
+    char username[COLUMN_USERNAME_SIZE + 1];    // Allocating 1 additional byte for the null character
+    char email[COLUMN_EMAIL_SIZE + 1];
 
     void serialize_row(void* destination) {
         // Just to give the void pointer 1 byte of space, Clang is strict in these sceneiors 
@@ -166,15 +166,41 @@ public:
         }
     }
 
+    PrepareResult prepare_insert(char* input_buffer) {
+        this->type = STATEMENT_INSERT;
+
+        char* keyword = strtok(input_buffer, " ");
+        char* id_string = strtok(nullptr, " ");
+        char* username = strtok(nullptr, " ");
+        char* email = strtok(nullptr, " ");
+
+        if (id_string == nullptr || username == nullptr || email == nullptr) {
+            return PREPARE_SYNTAX_ERROR;
+        }
+
+        int id = atoi(id_string);
+        if (id < 0) {
+            return PREPARE_NEGATIVE_ID;
+        }
+        if (strlen(username) > COLUMN_USERNAME_SIZE) {
+            return PREPARE_STRING_TOO_LONG;
+        }
+        if (strlen(email) > COLUMN_EMAIL_SIZE) {
+            return PREPARE_STRING_TOO_LONG;
+        }
+
+        this->row_to_insert.id = id;
+        strcpy(this->row_to_insert.username, username);
+        strcpy(this->row_to_insert.email, email);
+
+        return PREPARE_SUCCESS;
+    }
+
+
     // Parser for SQL commands
     PrepareResult prepare_statement(char* input_buffer) {
         if (strncasecmp(input_buffer, "insert", 6) == 0) {
-            this->type = STATEMENT_INSERT;
-            int args_assigned = sscanf(input_buffer, "insert %d %s %s", &(this->row_to_insert.id),this->row_to_insert.username, this->row_to_insert.email);
-            if (args_assigned < 3) {
-                return PREPARE_SYNTAX_ERROR;
-            }
-            return PREPARE_SUCCESS;
+            return prepare_insert(input_buffer);
         }
         if (strcasecmp(input_buffer, "select") == 0) {
             this->type = STATEMENT_SELECT;
@@ -214,6 +240,12 @@ int main(int argc, char *argv[]) {
                 continue;
             case (PREPARE_UNRECOGNIZED_STATEMENT):
                 printf("Unrecognized keyword at start of '%s'.\n",inputBuffer->buffer);
+                continue;
+            case (PREPARE_STRING_TOO_LONG):
+                printf("String is too long.\n");
+                continue;
+            case (PREPARE_NEGATIVE_ID):
+                printf("ID must be positive.\n");
                 continue;
         }
 
