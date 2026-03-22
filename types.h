@@ -10,7 +10,8 @@ typedef enum {
 // For the actual SQL commands
 typedef enum { 
     PREPARE_SUCCESS, 
-    PREPARE_UNRECOGNIZED_STATEMENT 
+    PREPARE_UNRECOGNIZED_STATEMENT,
+    PREPARE_SYNTAX_ERROR,
 } PrepareResult;
 
 // Actual SQL commands, for now allowing only insert and select for the sake of checking wether it is working or not
@@ -18,5 +19,10 @@ typedef enum {
     STATEMENT_INSERT, 
     STATEMENT_SELECT 
 } StatementType;
+
+typedef enum { 
+    EXECUTE_SUCCESS, 
+    EXECUTE_TABLE_FULL,
+} ExecuteResult;
 
 #endif
