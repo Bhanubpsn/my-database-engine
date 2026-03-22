@@ -15,7 +15,7 @@ rm -f $OUTPUT
 $COMPILER main.cpp -o $OUTPUT
 
 if [ $? -eq 0 ]; then
-    ./$OUTPUT
+    ./$OUTPUT bpsndb.db
 else 
     echo "Compilation failed"
 fi

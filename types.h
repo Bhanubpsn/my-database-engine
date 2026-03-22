@@ -1,5 +1,10 @@
 #ifndef TYPES_H
 #define TYPES_H
+#define TABLE_MAX_PAGES 100
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
+
+const uint32_t PAGE_SIZE = 4096;
 
 // META commands are Non-SQL which starts with a '.' eg. ".exit"
 typedef enum {
