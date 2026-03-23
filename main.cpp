@@ -2,7 +2,27 @@
 #include "types.h"
 #include "inputBuffer.h"
 #include "table.h"
+#include "cursor.h"
+#include "row.h"
 using namespace std;
+
+void* cursor_value(Cursor* cursor) {
+    uint32_t row_num = cursor->row_num;
+    uint32_t page_num = row_num / ROWS_PER_PAGE;
+    // void* page = table->pages[page_num];
+    // if (page == nullptr) {
+    //     // Allocate memory only when we try to access page
+    //     page = table->pages[page_num] = malloc(PAGE_SIZE);
+    // }
+
+    //Reading from pager now
+    void* page = cursor->table->pager->get_page(page_num);
+    uint32_t row_offset = row_num % ROWS_PER_PAGE;
+    uint32_t byte_offset = row_offset * ROW_SIZE;
+
+    // giving page, a void pointer, 1 byte space
+    return static_cast<char*>(page) + byte_offset;
+}
 
 class Statement {
 public:
@@ -15,21 +35,32 @@ public:
             return EXECUTE_TABLE_FULL;
         }
 
+        Cursor* cursor = new Cursor();
+        cursor->table_end(table);
+
         // Serializing the row and inserting into the pages with offset
-        row_to_insert.serialize_row(row_to_insert.row_slot(table, table->num_rows));
+        row_to_insert.serialize_row(cursor_value(cursor));
         table->num_rows++;
 
+        delete cursor;
         return EXECUTE_SUCCESS;
     }
 
     // Printing every row in the table
     ExecuteResult execute_select(Table* table) {
+        Cursor* cursor = new Cursor();
+        cursor->table_start(table);
+
         Row* row = new Row();
-        for (uint32_t i = 0; i < table->num_rows; i++) {
-            row->deserialize_row(row->row_slot(table, i));
+
+        while (!(cursor->end_of_table)) {
+            row->deserialize_row(cursor_value(cursor));
             row->print_row();
+            cursor->cursor_advance();
         }
+
         delete row;
+        delete cursor;
         return EXECUTE_SUCCESS;
     }
 
