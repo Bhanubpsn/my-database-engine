@@ -4,11 +4,11 @@
 #include "table.h"
 #include "cursor.h"
 #include "row.h"
+#include "b-tree.h"
 using namespace std;
 
 void* cursor_value(Cursor* cursor) {
-    uint32_t row_num = cursor->row_num;
-    uint32_t page_num = row_num / ROWS_PER_PAGE;
+    uint32_t page_num = cursor->page_num;
     // void* page = table->pages[page_num];
     // if (page == nullptr) {
     //     // Allocate memory only when we try to access page
@@ -17,11 +17,10 @@ void* cursor_value(Cursor* cursor) {
 
     //Reading from pager now
     void* page = cursor->table->pager->get_page(page_num);
-    uint32_t row_offset = row_num % ROWS_PER_PAGE;
-    uint32_t byte_offset = row_offset * ROW_SIZE;
+    LeafNode leafNode;
+    leafNode.node = (uint8_t*)page;
 
-    // giving page, a void pointer, 1 byte space
-    return static_cast<char*>(page) + byte_offset;
+    return leafNode.leaf_node_value(cursor->cell_num);
 }
 
 class Statement {
@@ -31,16 +30,17 @@ public:
 
     // Inserting into table and increasing the num of rows count in the table
     ExecuteResult execute_insert(Table* table) {
-        if (table->num_rows >= TABLE_MAX_ROWS) {
+        void* node = table->pager->get_page(table->root_page_num);
+        LeafNode leafNode;
+        leafNode.node = (uint8_t*)node;
+        if ((*leafNode.leaf_node_num_cells() >= LEAF_NODE_MAX_CELLS)) {
             return EXECUTE_TABLE_FULL;
         }
 
         Cursor* cursor = new Cursor();
         cursor->table_end(table);
 
-        // Serializing the row and inserting into the pages with offset
-        row_to_insert.serialize_row(cursor_value(cursor));
-        table->num_rows++;
+        cursor->leaf_node_insert(row_to_insert.id, row_to_insert);
 
         delete cursor;
         return EXECUTE_SUCCESS;

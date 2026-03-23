@@ -32,4 +32,10 @@ typedef enum {
     EXECUTE_TABLE_FULL,
 } ExecuteResult;
 
+// B-Tree Nodes 
+typedef enum { 
+    NODE_INTERNAL, 
+    NODE_LEAF 
+} NodeType;
+
 #endif
