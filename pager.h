@@ -12,6 +12,7 @@ public:
     int file_descriptor;
     uint32_t file_length;
     void* pages[TABLE_MAX_PAGES];
+    uint32_t num_pages;
 
     Pager (const char* filename) {
         int fd = open(filename,
@@ -28,6 +29,11 @@ public:
 
         // long long 
         off_t file_length = lseek(fd, 0, SEEK_END);
+        this->num_pages = (file_length / PAGE_SIZE);
+        if (file_length % PAGE_SIZE != 0) {
+            printf("Db file is not a whole number of pages. Corrupt file.\n");
+            exit(EXIT_FAILURE);
+        }
         this->file_descriptor = fd;
         this->file_length = file_length;
 
@@ -63,13 +69,16 @@ public:
             }
 
             this->pages[page_num] = page;
+            if (page_num >= this->num_pages) {
+                this->num_pages = page_num + 1;
+            }
         }
 
         return this->pages[page_num];
     }
 
     // Writing in the file
-    void pager_flush(uint32_t page_num, uint32_t size) {
+    void pager_flush(uint32_t page_num) {
         if (this->pages[page_num] == NULL) {
             printf("Tried to flush null page\n");
             exit(EXIT_FAILURE);
@@ -82,8 +91,7 @@ public:
             exit(EXIT_FAILURE);
         }
 
-        ssize_t bytes_written =
-            write(this->file_descriptor, this->pages[page_num], size);
+        ssize_t bytes_written = write(this->file_descriptor, this->pages[page_num], PAGE_SIZE);
 
         if (bytes_written == -1) {
             printf("Error writing: %d\n", errno);

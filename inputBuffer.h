@@ -1,6 +1,7 @@
 #include <iostream>
 #include "types.h"
 #include "table.h"
+#include "b-tree.h"
 #ifndef INPUTBUFFER_H
 #define INPUTBUFFER_H
 using namespace std;
@@ -43,6 +44,13 @@ public:
             table->db_close();
             cout<<"Closing DB connection\n";
             exit(EXIT_SUCCESS);
+        } else if (strcmp(this->buffer, ".btree") == 0) {
+            printf("Tree:\n");
+            void* node = table->pager->get_page(0);
+            LeafNode leafNode;
+            leafNode.node = (uint8_t*)node;
+            leafNode.print_leaf_node();
+            return META_COMMAND_SUCCESS;
         } else {
             return META_COMMAND_UNRECOGNIZED_COMMAND;
         }
