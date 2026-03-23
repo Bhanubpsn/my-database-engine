@@ -33,13 +33,22 @@ public:
         void* node = table->pager->get_page(table->root_page_num);
         LeafNode leafNode;
         leafNode.node = (uint8_t*)node;
-        if ((*leafNode.leaf_node_num_cells() >= LEAF_NODE_MAX_CELLS)) {
+        uint32_t num_cells = (*leafNode.leaf_node_num_cells());
+        if (num_cells >= LEAF_NODE_MAX_CELLS) {
             return EXECUTE_TABLE_FULL;
         }
 
+        uint32_t key_to_insert = row_to_insert.id;
         Cursor* cursor = new Cursor();
-        cursor->table_end(table);
+        // cursor->table_end(table);
+        cursor->table_find(table, key_to_insert);   // Finding the a place to insert the key rather than pushing at the end
 
+        if (cursor->cell_num < num_cells) {
+            uint32_t key_at_index = *leafNode.leaf_node_key(cursor->cell_num);
+            if (key_at_index == key_to_insert) {
+                return EXECUTE_DUPLICATE_KEY;
+            }
+        }
         cursor->leaf_node_insert(row_to_insert.id, row_to_insert);
 
         delete cursor;
@@ -165,6 +174,9 @@ int main(int argc, char *argv[]) {
         switch (statement.execute_statement(table)) {
             case (EXECUTE_SUCCESS):
                 printf("Executed.\n");
+                break;
+            case (EXECUTE_DUPLICATE_KEY):
+                printf("Error: Duplicate key.\n");
                 break;
             case (EXECUTE_TABLE_FULL):
                 printf("Error: Table full.\n");

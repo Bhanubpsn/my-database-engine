@@ -75,12 +75,22 @@ public:
         return leaf_node_cell(cell_num) + LEAF_NODE_KEY_SIZE;
     }
 
+    void set_node_type(NodeType type) {
+        uint8_t value = type;
+        *((uint8_t*)(node + NODE_TYPE_OFFSET)) = value;
+    }
+
     void initialize_leaf_node(bool is_root) {
         *leaf_node_num_cells() = 0;
-        *(node + NODE_TYPE_OFFSET) = NODE_LEAF;
+        set_node_type(NODE_LEAF);
         *(node + IS_ROOT_OFFSET) = is_root ? 1 : 0;
         uint32_t *parent = (uint32_t *)(node + PARENT_POINTER_OFFSET);
         *parent = 0;
+    }
+
+    NodeType get_node_type() {
+        uint8_t value = *((uint8_t*)(node + NODE_TYPE_OFFSET));
+        return (NodeType)value;
     }
 
     void print_leaf_node(){
