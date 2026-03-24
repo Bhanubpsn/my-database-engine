@@ -41,8 +41,8 @@ public:
             leaf_node_find(root_page_num, key);
             return;
         } else {
-            printf("Need to implement searching an internal node\n");
-            exit(EXIT_FAILURE);
+            internal_node_find(root_page_num, key);
+            return;
         }
     }
 
@@ -109,6 +109,39 @@ public:
         }
         this->cell_num = min_index;
         return;
+    }
+
+    void internal_node_find(uint32_t page_num, uint32_t key) {
+        void* node = this->table->pager->get_page(page_num);
+        InternalNode internalNode;
+        internalNode.node = (uint8_t*)node;
+        uint32_t num_keys = *internalNode.internal_node_num_keys();
+
+        /* Binary search to find index of child to search */
+        uint32_t min_index = 0;
+        uint32_t max_index = num_keys; /* there is one more child than key */
+
+        while (min_index != max_index) {
+            uint32_t index = (min_index + max_index) / 2;
+            uint32_t key_to_right = *internalNode.internal_node_key(index);
+            if (key_to_right >= key) {
+                max_index = index;
+            } else {
+                min_index = index + 1;
+            }
+        }
+        uint32_t child_num = *internalNode.internal_node_child(min_index);
+        void* child = this->table->pager->get_page(child_num);
+        InternalNode childNode;
+        childNode.node = (uint8_t*)child;
+        switch (childNode.get_node_type()) {
+            case NODE_LEAF:
+                leaf_node_find(child_num, key);
+                return;
+            case NODE_INTERNAL:
+                internal_node_find(child_num, key);
+                return;
+        }
     }
 
     void create_new_root(uint32_t right_child_page_num) {
