@@ -1,6 +1,7 @@
 #include <iostream>
 #include "types.h"
 #include "row.h"
+#include "pager.h"
 #ifndef BTREE_H
 #define BTREE_H
 
@@ -38,6 +39,8 @@ const uint32_t LEAF_NODE_VALUE_OFFSET = LEAF_NODE_KEY_OFFSET + LEAF_NODE_KEY_SIZ
 const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
 const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 const uint32_t LEAF_NODE_MAX_CELLS = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
+const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
+const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
 
 /*
     Node (A single page) Byte Map =>
@@ -63,16 +66,21 @@ public:
         return (uint32_t *)(node + LEAF_NODE_NUM_CELLS_OFFSET);
     }
 
+    // Helper for internal use to get a raw address
+    uint8_t* leaf_node_cell_ptr(uint32_t cell_num) {
+        return node + LEAF_NODE_HEADER_SIZE + (cell_num * LEAF_NODE_CELL_SIZE);
+    }
+
     uint32_t *leaf_node_cell(uint32_t cell_num) {
         return (uint32_t *)(node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE);
     }
 
     uint32_t *leaf_node_key(uint32_t cell_num) {
-        return leaf_node_cell(cell_num);
+        return (uint32_t *)leaf_node_cell_ptr(cell_num);
     }
 
-    uint32_t *leaf_node_value(uint32_t cell_num) {
-        return leaf_node_cell(cell_num) + LEAF_NODE_KEY_SIZE;
+    void* leaf_node_value(uint32_t cell_num) {
+        return leaf_node_cell_ptr(cell_num) + LEAF_NODE_KEY_SIZE;
     }
 
     void set_node_type(NodeType type) {
@@ -83,6 +91,7 @@ public:
     void initialize_leaf_node(bool is_root) {
         *leaf_node_num_cells() = 0;
         set_node_type(NODE_LEAF);
+        set_node_root(false);
         *(node + IS_ROOT_OFFSET) = is_root ? 1 : 0;
         uint32_t *parent = (uint32_t *)(node + PARENT_POINTER_OFFSET);
         *parent = 0;
@@ -99,6 +108,147 @@ public:
         for (uint32_t i = 0; i < num_cells; i++) {
             uint32_t key = *leaf_node_key(i);
             printf("  - %d : %d\n", i, key);
+        }
+    }
+
+    bool is_node_root() {
+        uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
+        return (bool)value;
+    }
+
+    void set_node_root(bool is_root) {
+        uint8_t value = is_root;
+        *((uint8_t*)(node + IS_ROOT_OFFSET)) = value;
+    }
+};
+
+/*
+    Internal Node Header Layout
+*/
+
+const uint32_t INTERNAL_NODE_NUM_KEYS_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_NUM_KEYS_OFFSET = COMMON_NODE_HEADER_SIZE;
+const uint32_t INTERNAL_NODE_RIGHT_CHILD_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_RIGHT_CHILD_OFFSET = INTERNAL_NODE_NUM_KEYS_OFFSET + INTERNAL_NODE_NUM_KEYS_SIZE;
+const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE + INTERNAL_NODE_NUM_KEYS_SIZE + INTERNAL_NODE_RIGHT_CHILD_SIZE;
+
+/*
+    Internal Node Body Layout
+*/
+
+const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_CELL_SIZE = INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
+
+/*
+    Internal Node Byte Map =>
+    Byte 0 -> node_type
+    Byte 1 -> is_root
+    Byte 2-5 -> parent pointer
+    Byte 6-9 -> num_keys
+    Byte 10-13 -> right child pointer
+    Byte 14-17 -> child pointer
+    Byte 18-21 -> Key
+    ...
+    ...
+    Byte 4086-4089 -> child point 
+    Byte 4090-4093 -> key
+    Byte 4094-4095 -> Wasted space
+
+*/
+
+class InternalNode : public LeafNode {
+public:
+
+    uint32_t* internal_node_num_keys() {
+        return (uint32_t*)(node + INTERNAL_NODE_NUM_KEYS_OFFSET);
+    }
+
+    uint32_t* internal_node_right_child() {
+        return (uint32_t*)(node + INTERNAL_NODE_RIGHT_CHILD_OFFSET);
+    }
+
+    uint32_t* internal_node_cell(uint32_t cell_num) {
+        return (uint32_t*)(node + INTERNAL_NODE_HEADER_SIZE + cell_num * INTERNAL_NODE_CELL_SIZE);
+    }
+
+    // Helper for internal use
+    uint8_t* internal_node_cell_ptr(uint32_t cell_num) {
+        return node + INTERNAL_NODE_HEADER_SIZE + (cell_num * INTERNAL_NODE_CELL_SIZE);
+    }
+
+    uint32_t* internal_node_child(uint32_t child_num) {
+        uint32_t num_keys = *internal_node_num_keys();
+        if (child_num > num_keys) {
+            printf("Tried to access child_num %d > num_keys %d\n", child_num, num_keys);
+            exit(EXIT_FAILURE);
+        } else if (child_num == num_keys) {
+            return internal_node_right_child();
+        } else {
+            return (uint32_t*)internal_node_cell_ptr(child_num);
+        }
+    }
+
+    uint32_t* internal_node_key(uint32_t key_num) {
+        // Explicitly move 4 bytes (the size of a child pointer) past the cell start
+        return (uint32_t*)(internal_node_cell_ptr(key_num) + INTERNAL_NODE_CHILD_SIZE);
+    }
+
+    uint32_t get_node_max_key() {
+        uint32_t num = 0;
+        switch (get_node_type()) {
+            case NODE_INTERNAL:
+                num = *internal_node_num_keys();
+                return (num == 0) ? 0 : *internal_node_key(num - 1);
+            case NODE_LEAF:
+                num = *leaf_node_num_cells();
+                return (num == 0) ? 0 : *leaf_node_key(num - 1);
+        }
+        return 0;
+    }
+
+    void initialize_internal_node() {
+        set_node_type(NODE_INTERNAL);
+        set_node_root(false);
+        *internal_node_num_keys() = 0;
+    }
+
+    void indent(uint32_t level) {
+        for (uint32_t i = 0; i < level; i++) {
+            printf("  ");
+        }
+    }
+
+    void print_tree(Pager* pager, uint32_t page_num, uint32_t indentation_level) {
+        void* n = pager->get_page(page_num);
+        uint32_t num_keys, child;
+        InternalNode node;
+        node.node = (uint8_t*)n;
+
+        switch (node.get_node_type()) {
+            case (NODE_LEAF):
+                num_keys = *node.leaf_node_num_cells();
+                indent(indentation_level);
+                printf("- leaf (size %d)\n", num_keys);
+                for (uint32_t i = 0; i < num_keys; i++) {
+                    indent(indentation_level + 1);
+                    printf("- %d\n", *node.leaf_node_key(i));
+                }
+                break;
+            case (NODE_INTERNAL):
+                num_keys = *node.internal_node_num_keys();
+                indent(indentation_level);
+                printf("- internal (size %d)\n", num_keys);
+                for (uint32_t i = 0; i < num_keys; i++) {
+                    child = *node.internal_node_child(i);
+                    print_tree(pager, child, indentation_level + 1);
+
+                    indent(indentation_level + 1);
+                    printf("- key %d\n", *node.internal_node_key(i));
+                }
+                child = *node.internal_node_right_child();
+                print_tree(pager, child, indentation_level + 1);
+            break;
         }
     }
 };

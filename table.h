@@ -22,8 +22,9 @@ public:
             // New database file. Initialize page 0 as leaf node.
             void *root_node = this->pager->get_page(0);
             LeafNode leafNode;
-            leafNode.node = (uint8_t *)root_node;
+            leafNode.node = (uint8_t*)root_node;
             leafNode.initialize_leaf_node(true);
+            leafNode.set_node_root(true);
         }
     }
 

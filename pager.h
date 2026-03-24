@@ -98,6 +98,12 @@ public:
             exit(EXIT_FAILURE);
         }
     }
+
+    /*
+        Until we start recycling free pages, new pages will always
+        go onto the end of the database file
+    */
+    uint32_t get_unused_page_num() { return this->num_pages; }
 };
 
 #endif

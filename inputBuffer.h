@@ -47,9 +47,12 @@ public:
         } else if (strcmp(this->buffer, ".btree") == 0) {
             printf("Tree:\n");
             void* node = table->pager->get_page(0);
-            LeafNode leafNode;
-            leafNode.node = (uint8_t*)node;
-            leafNode.print_leaf_node();
+            // LeafNode leafNode;
+            // leafNode.node = (uint8_t*)node;
+            // leafNode.print_leaf_node();
+            InternalNode internalNode;
+            internalNode.node = (uint8_t*)node;
+            internalNode.print_tree(table->pager,0,0);
             return META_COMMAND_SUCCESS;
         } else {
             return META_COMMAND_UNRECOGNIZED_COMMAND;
