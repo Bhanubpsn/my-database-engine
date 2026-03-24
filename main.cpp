@@ -34,9 +34,6 @@ public:
         LeafNode leafNode;
         leafNode.node = (uint8_t*)node;
         uint32_t num_cells = (*leafNode.leaf_node_num_cells());
-        if (num_cells >= LEAF_NODE_MAX_CELLS) {
-            return EXECUTE_TABLE_FULL;
-        }
 
         uint32_t key_to_insert = row_to_insert.id;
         Cursor* cursor = new Cursor();
