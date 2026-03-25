@@ -14,14 +14,11 @@ public:
     bool end_of_table;  // Indicates a position one past the last element of the table
 
     void table_start(Table* table) {
-        this->table = table;
-        this->page_num = table->root_page_num;
-        this->cell_num = 0;
-
+        table_find(table, 0);
         void* root_node = table->pager->get_page(table->root_page_num);
-        LeafNode leafNode;                  // Making it static so ne memory leaks occurs
-        leafNode.node = (uint8_t*)root_node;
-        uint32_t num_cells = *leafNode.leaf_node_num_cells();
+        InternalNode rootNode;                  // Making it static so ne memory leaks occurs
+        rootNode.node = (uint8_t*)root_node;
+        uint32_t num_cells = *rootNode.leaf_node_num_cells();
         this->end_of_table = (num_cells == 0);
     }
 
@@ -54,7 +51,15 @@ public:
         leafNode.node = (uint8_t*)node;
         this->cell_num += 1;
         if (this->cell_num >= (*leafNode.leaf_node_num_cells())) {
-            this->end_of_table = true;
+            // Advance to next leaf node 
+            uint32_t next_page_num = *leafNode.leaf_node_next_leaf();
+            if (next_page_num == 0) {
+                // This was rightmost leaf i.e. no siblings left
+                this->end_of_table = true;
+            } else {
+                this->page_num = next_page_num;
+                this->cell_num = 0;
+            }
         }
     }
 
@@ -197,14 +202,17 @@ public:
         newNode.node = (uint8_t*)new_node;
         newNode.initialize_leaf_node(false);
 
+        LeafNode oldNode;
+        oldNode.node = (uint8_t*)old_node;
+
+        *newNode.leaf_node_next_leaf() = *oldNode.leaf_node_next_leaf();
+        *oldNode.leaf_node_next_leaf() = new_page_num;
+
         /*
             All existing keys plus new key should be divided
             evenly between old (left) and new (right) nodes.
             Starting from the right, move each key to correct position.
         */
-
-        LeafNode oldNode;
-        oldNode.node = (uint8_t*)old_node;
 
         for (int32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
             void* destination_node;
@@ -220,6 +228,8 @@ public:
 
             if (i == this->cell_num) {
                 value.serialize_row(destination);
+                value.serialize_row(destinationNode.leaf_node_value(index_within_node));
+                *destinationNode.leaf_node_key(index_within_node) = key;
             } else if (i > this->cell_num) {
                 memcpy(destination, oldNode.leaf_node_cell(i - 1), LEAF_NODE_CELL_SIZE);
             } else {

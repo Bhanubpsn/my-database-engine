@@ -26,7 +26,9 @@ Leaf Node Header Layout
 
 const uint32_t LEAF_NODE_NUM_CELLS_SIZE = sizeof(uint32_t);
 const uint32_t LEAF_NODE_NUM_CELLS_OFFSET = COMMON_NODE_HEADER_SIZE;
-const uint32_t LEAF_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE + LEAF_NODE_NUM_CELLS_SIZE;
+const uint32_t LEAF_NODE_NEXT_LEAF_SIZE = sizeof(uint32_t);
+const uint32_t LEAF_NODE_NEXT_LEAF_OFFSET = LEAF_NODE_NUM_CELLS_OFFSET + LEAF_NODE_NUM_CELLS_SIZE;
+const uint32_t LEAF_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE + LEAF_NODE_NUM_CELLS_SIZE + LEAF_NODE_NEXT_LEAF_SIZE;
 
 /*
 Leaf Node Body Layout
@@ -95,6 +97,7 @@ public:
         *(node + IS_ROOT_OFFSET) = is_root ? 1 : 0;
         uint32_t *parent = (uint32_t *)(node + PARENT_POINTER_OFFSET);
         *parent = 0;
+        *leaf_node_next_leaf() = 0;  // 0 represents no sibling
     }
 
     NodeType get_node_type() {
@@ -119,6 +122,10 @@ public:
     void set_node_root(bool is_root) {
         uint8_t value = is_root;
         *((uint8_t*)(node + IS_ROOT_OFFSET)) = value;
+    }
+
+    uint32_t* leaf_node_next_leaf() {
+        return (uint32_t*)(node + LEAF_NODE_NEXT_LEAF_OFFSET);
     }
 };
 
