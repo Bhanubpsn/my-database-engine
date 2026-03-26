@@ -127,6 +127,10 @@ public:
     uint32_t* leaf_node_next_leaf() {
         return (uint32_t*)(node + LEAF_NODE_NEXT_LEAF_OFFSET);
     }
+
+    uint32_t* node_parent() {
+        return (uint32_t*)(node + PARENT_POINTER_OFFSET);
+    }
 };
 
 /*
@@ -146,6 +150,7 @@ const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE + INTERNAL_NO
 const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE = INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
+const uint32_t INTERNAL_NODE_MAX_CELLS = 4;
 
 /*
     Internal Node Byte Map =>
