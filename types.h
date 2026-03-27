@@ -22,11 +22,12 @@ typedef enum {
     PREPARE_NEGATIVE_ID,
 } PrepareResult;
 
-// Actual SQL commands, for now allowing only insert, select, update for the sake of checking wether it is working or not
+// Actual SQL commands, for now allowing only insert, select, update, delete for the sake of checking wether it is working or not
 typedef enum { 
     STATEMENT_INSERT, 
     STATEMENT_SELECT,
     STATEMENT_UPDATE,
+    STATEMENT_DELETE,
 } StatementType;
 
 typedef enum { 

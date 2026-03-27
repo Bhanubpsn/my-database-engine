@@ -43,6 +43,7 @@ const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
 const uint32_t LEAF_NODE_MAX_CELLS = LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
 const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
 const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
+const uint32_t LEAF_NODE_MIN_CELLS = LEAF_NODE_MAX_CELLS / 2;
 
 /*
     Node (A single page) Byte Map =>
@@ -100,6 +101,12 @@ public:
         *leaf_node_next_leaf() = 0;  // 0 represents no sibling
     }
 
+    uint32_t get_node_max_key() {
+        uint32_t num = 0;
+        num = *leaf_node_num_cells();
+        return (num == 0) ? 0 : *leaf_node_key(num - 1);
+    }
+
     NodeType get_node_type() {
         uint8_t value = *((uint8_t*)(node + NODE_TYPE_OFFSET));
         return (NodeType)value;
@@ -151,6 +158,7 @@ const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE = INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
 const uint32_t INTERNAL_NODE_MAX_CELLS = 3;
+const uint32_t INTERNAL_NODE_MIN_KEYS = INTERNAL_NODE_MAX_CELLS / 2;
 
 /*
     Internal Node Byte Map =>
@@ -214,19 +222,6 @@ public:
     uint32_t* internal_node_key(uint32_t key_num) {
         // Explicitly move 4 bytes (the size of a child pointer) past the cell start
         return (uint32_t*)(internal_node_cell_ptr(key_num) + INTERNAL_NODE_CHILD_SIZE);
-    }
-
-    uint32_t get_node_max_key() {
-        uint32_t num = 0;
-        switch (get_node_type()) {
-            case NODE_INTERNAL:
-                num = *internal_node_num_keys();
-                return (num == 0) ? 0 : *internal_node_key(num - 1);
-            case NODE_LEAF:
-                num = *leaf_node_num_cells();
-                return (num == 0) ? 0 : *leaf_node_key(num - 1);
-        }
-        return 0;
     }
 
     uint32_t get_node_max_key(Pager* pager) {

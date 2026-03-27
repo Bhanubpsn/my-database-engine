@@ -80,6 +80,34 @@ public:
         return EXECUTE_KEY_NOT_FOUND;
     }
 
+    ExecuteResult execute_delete(Table* table) {
+        uint32_t key_to_delete = row_to_insert.id;      // TODO: This name is misleading, we are deleting the row, will change it soon.
+        Cursor* cursor = new Cursor();
+        
+        // Finding where the key should be
+        cursor->table_find(table, key_to_delete);
+
+        // Accessing the specific page the cursor found
+        void* node = table->pager->get_page(cursor->page_num);
+        LeafNode leafNode;
+        leafNode.node = (uint8_t*)node;
+
+        uint32_t num_cells = *leafNode.leaf_node_num_cells();
+
+        // Verifying the key actually exists
+        if (cursor->cell_num < num_cells) {
+            uint32_t key_at_index = *leafNode.leaf_node_key(cursor->cell_num);
+            if (key_at_index == key_to_delete) {
+                // deleting the node data
+                cursor->leaf_node_delete(key_to_delete);
+                return EXECUTE_SUCCESS;
+            }
+        }
+
+        delete cursor;
+        return EXECUTE_KEY_NOT_FOUND;
+    }
+
     // Printing every row in the table
     ExecuteResult execute_select(Table* table) {
         Cursor* cursor = new Cursor();
@@ -106,6 +134,8 @@ public:
                 return execute_select(table);
             case (STATEMENT_UPDATE):
                 return execute_update(table);
+            case (STATEMENT_DELETE):
+                return execute_delete(table);
         }
     }
 
@@ -169,6 +199,24 @@ public:
         return PREPARE_SUCCESS;
     }
 
+    PrepareResult prepare_delete(char* input_buffer) {
+        this->type = STATEMENT_DELETE;
+
+        char* keyword = strtok(input_buffer, " ");
+        char* id_string = strtok(nullptr, " ");
+
+        if (id_string == nullptr) {
+            return PREPARE_SYNTAX_ERROR;
+        }
+
+        int id = atoi(id_string);
+        if (id < 0) {
+            return PREPARE_NEGATIVE_ID;
+        }
+        this->row_to_insert.id = id;    // This name is misleading for this function
+        return PREPARE_SUCCESS;
+    }
+
 
     // Parser for SQL commands
     PrepareResult prepare_statement(char* input_buffer) {
@@ -181,6 +229,9 @@ public:
         if (strcasecmp(input_buffer, "select") == 0) {
             this->type = STATEMENT_SELECT;
             return PREPARE_SUCCESS;
+        }
+        if (strncasecmp(input_buffer, "delete", 6) == 0) {
+            return prepare_delete(input_buffer);
         }
         return PREPARE_UNRECOGNIZED_STATEMENT;
     }
