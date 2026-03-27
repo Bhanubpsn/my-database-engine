@@ -29,7 +29,7 @@ public:
         //Fun fact: ssize_t is a fancy way to represent long
         ssize_t bytes_read = getline(&(this->buffer), &(this->buffer_length), stdin);
         if (bytes_read <= 0) {
-            cout<<"Error reading input\n";
+            cout<<"Error reading input"<<endl;
             exit(EXIT_FAILURE);
         }
         // Ignore trailing newline
@@ -42,10 +42,10 @@ public:
     MetaCommandResult do_meta_command(Table* table) {
         if (strcmp(this->buffer, ".exit") == 0) {
             table->db_close();
-            cout<<"Closing DB connection\n";
-            exit(EXIT_SUCCESS);
+            cout<<"Closing DB connection"<<endl;
+            return META_COMMAND_SUCCESS;
         } else if (strcmp(this->buffer, ".btree") == 0) {
-            printf("Tree:\n");
+            cout<<"Tree:"<<endl;
             void* node = table->pager->get_page(0);
             // LeafNode leafNode;
             // leafNode.node = (uint8_t*)node;

@@ -112,15 +112,6 @@ public:
         return (NodeType)value;
     }
 
-    void print_leaf_node(){
-        uint32_t num_cells = *leaf_node_num_cells();
-        printf("leaf (size %d)\n", num_cells);
-        for (uint32_t i = 0; i < num_cells; i++) {
-            uint32_t key = *leaf_node_key(i);
-            printf("  - %d : %d\n", i, key);
-        }
-    }
-
     bool is_node_root() {
         uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
         return (bool)value;
@@ -248,7 +239,7 @@ public:
 
     void indent(uint32_t level) {
         for (uint32_t i = 0; i < level; i++) {
-            printf("  ");
+            cout<<"  ";
         }
     }
 
@@ -262,23 +253,23 @@ public:
             case (NODE_LEAF):
                 num_keys = *node.leaf_node_num_cells();
                 indent(indentation_level);
-                printf("- leaf (size %d)\n", num_keys);
+                cout<<"- leaf (size "<< num_keys<<")"<<endl;
                 for (uint32_t i = 0; i < num_keys; i++) {
                     indent(indentation_level + 1);
-                    printf("- %d\n", *node.leaf_node_key(i));
+                    cout<<"- "<<*node.leaf_node_key(i)<<endl;
                 }
                 break;
             case (NODE_INTERNAL):
                 num_keys = *node.internal_node_num_keys();
                 indent(indentation_level);
-                printf("- internal (size %d)\n", num_keys);
+                cout<<"- internal (size "<<num_keys<<")"<<endl;
                 if (num_keys > 0) {
                     for (uint32_t i = 0; i < num_keys; i++) {
                     child = *internal_node_child(i);
                     print_tree(pager, child, indentation_level + 1);
 
                     indent(indentation_level + 1);
-                    printf("- key %d\n", *internal_node_key(i));
+                    cout<<"- key "<<*internal_node_key(i)<<endl;
                 }
                     child = *internal_node_right_child();
                     print_tree(pager, child, indentation_level + 1);

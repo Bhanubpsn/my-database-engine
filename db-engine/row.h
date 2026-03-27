@@ -44,7 +44,7 @@ public:
     }
 
     void print_row() {
-        cout<<this->id<<" "<<this->username<<" "<<this->email<<"\n";
+        cout<<this->id<<" "<<this->username<<" "<<this->email<<endl;
     }
 };
 

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package bpsndb;
+
+option go_package = "./proto";
+
+// The message representing a database row
+message Row {
+  uint32 id = 1;
+  string username = 2;
+  string email = 3;
+}
+
+// Request for executing a command
+message CommandRequest {
+  string statement = 1; // e.g. insert 1 bhanu b@mail.com or select
+}
+
+// Response from the engine
+message CommandResponse {
+  enum Status {
+    SUCCESS = 0;
+    FAILURE = 1;
+    TABLE_FULL = 2;
+  }
+  Status status = 1;
+  string message = 2;
+  repeated Row rows = 3; // For SELECT queries
+}
+
+service DatabaseEngine {
+  rpc Execute(CommandRequest) returns (CommandResponse);
+}
