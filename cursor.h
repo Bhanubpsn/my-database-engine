@@ -178,10 +178,25 @@ public:
         InternalNode rightChild;
         rightChild.node = (uint8_t*)right_child;
 
+        if (rootNode.get_node_type() == NODE_INTERNAL) {
+            rightChild.initialize_internal_node();
+            leftChild.initialize_internal_node();
+        }
+
         /* Left child has data copied from old root */
 
         memcpy(left_child, root, PAGE_SIZE);
         leftChild.set_node_root(false);
+
+        if (leftChild.get_node_type() == NODE_INTERNAL) {
+            InternalNode childNode;
+            for (int i = 0; i < *leftChild.internal_node_num_keys(); i++) {
+                childNode.node = (uint8_t*)this->table->pager->get_page(*leftChild.internal_node_child(i));
+                *childNode.node_parent() = left_child_page_num;
+            }
+            childNode.node = (uint8_t*)this->table->pager->get_page(*leftChild.internal_node_right_child());
+            *childNode.node_parent() = left_child_page_num;
+        }
 
         /* Root node is a new internal node with one key and two children */
 
@@ -191,7 +206,7 @@ public:
         *rootNode.internal_node_num_keys() = 1;
         *rootNode.internal_node_child(0) = left_child_page_num;
         
-        uint32_t left_child_max_key = leftChild.get_node_max_key();
+        uint32_t left_child_max_key = leftChild.get_node_max_key(this->table->pager);
         *rootNode.internal_node_key(0) = left_child_max_key;
         *rootNode.internal_node_right_child() = right_child_page_num;
         *leftChild.node_parent() = this->table->root_page_num;
@@ -202,6 +217,109 @@ public:
         uint32_t old_child_index = internal_node_find_child(node, old_key);
         *node.internal_node_key(old_child_index) = new_key;
     }
+
+    void internal_node_split_and_insert(uint32_t parent_page_num, uint32_t child_page_num) {
+        uint32_t old_page_num = parent_page_num;
+        void* old_node = this->table->pager->get_page(parent_page_num);
+        InternalNode oldNode;
+        oldNode.node = (uint8_t*)old_node;
+        uint32_t old_max = oldNode.get_node_max_key(this->table->pager);
+
+        void* child = this->table->pager->get_page(child_page_num); 
+        InternalNode childNode;
+        childNode.node = (uint8_t*)child;
+        uint32_t child_max = childNode.get_node_max_key(this->table->pager);
+
+        uint32_t new_page_num = this->table->pager->get_unused_page_num();
+
+        // Declaring a flag before updating pointers which
+        // records whether this operation involves splitting the root -
+        // if it does, we will insert our newly created node during
+        // the step where the table's new root is created. If it does
+        // not, we have to insert the newly created node into its parent
+        // after the old node's keys have been transferred over. We are not
+        // able to do this if the newly created node's parent is not a newly
+        // initialized root node, because in that case its parent may have existing
+        // keys aside from our old node which we are splitting. If that is true, we
+        // need to find a place for our newly created node in its parent, and we
+        // cannot insert it at the correct index if it does not yet have any keys
+        
+        uint32_t splitting_root = oldNode.is_node_root();
+
+        void* parent;
+        InternalNode parentNode;
+        void* new_node;
+        InternalNode newNode;
+        if (splitting_root) {
+            create_new_root(new_page_num);
+            parent = this->table->pager->get_page(this->table->root_page_num);
+            /*
+                If we are splitting the root, we need to update old_node to point
+                to the new root's left child, new_page_num will already point to
+                the new root's right child
+            */
+            parentNode.node = (uint8_t*)parent;
+            old_page_num = *parentNode.internal_node_child(0);
+            old_node = this->table->pager->get_page(old_page_num);
+        } else {
+            parent = this->table->pager->get_page(*oldNode.node_parent());
+            parentNode.node = (uint8_t*)parent;
+            new_node = this->table->pager->get_page(new_page_num);
+            newNode.node = (uint8_t*)new_node;
+            newNode.initialize_internal_node();
+        }
+        
+        uint32_t* old_num_keys = oldNode.internal_node_num_keys();
+
+        uint32_t cur_page_num = *oldNode.internal_node_right_child();
+        void* cur = this->table->pager->get_page(cur_page_num);
+        InternalNode curr;
+        curr.node = (uint8_t*)cur;
+
+        // First put right child into new node and set right child of old node to invalid page number
+
+        internal_node_insert(new_page_num, cur_page_num);
+        *curr.node_parent() = new_page_num;
+        *oldNode.internal_node_right_child() = INVALID_PAGE_NUM;
+
+        // For each key until you get to the middle key, move the key and the child to the new node
+
+        for (int i = INTERNAL_NODE_MAX_CELLS - 1; i > INTERNAL_NODE_MAX_CELLS / 2; i--) {
+            cur_page_num = *oldNode.internal_node_child(i);
+            cur = this->table->pager->get_page(cur_page_num);
+
+            internal_node_insert(new_page_num, cur_page_num);
+            *curr.node_parent() = new_page_num;
+
+            (*old_num_keys)--;
+        }
+
+        /*
+            Set child before middle key, which is now the highest key, to be node's right child,
+            and decrement number of keys
+        */
+        *oldNode.internal_node_right_child() = *oldNode.internal_node_child(*old_num_keys - 1);
+        (*old_num_keys)--;
+
+        /*
+            Determine which of the two nodes after the split should contain the child to be inserted,
+            and insert the child
+        */
+        uint32_t max_after_split = oldNode.get_node_max_key(this->table->pager);
+
+        uint32_t destination_page_num = child_max < max_after_split ? old_page_num : new_page_num;
+
+        internal_node_insert(destination_page_num, child_page_num);
+        *childNode.node_parent() = destination_page_num;
+
+        update_internal_node_key(parentNode, old_max, oldNode.get_node_max_key(this->table->pager));
+
+        if (!splitting_root) {
+            internal_node_insert(*oldNode.node_parent(),new_page_num);
+            *newNode.node_parent() = *oldNode.node_parent();
+        }
+    }
+
 
     void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
         // Add a new child/key pair to parent that corresponds to child
@@ -214,26 +332,43 @@ public:
         InternalNode childNode;
         childNode.node = (uint8_t*) child;
 
-        uint32_t child_max_key = childNode.get_node_max_key();
+        uint32_t child_max_key = childNode.get_node_max_key(this->table->pager);
         uint32_t index = internal_node_find_child(parentNode, child_max_key);
 
         uint32_t original_num_keys = *parentNode.internal_node_num_keys();
-        *parentNode.internal_node_num_keys() = original_num_keys + 1;
+        // *parentNode.internal_node_num_keys() = original_num_keys + 1;
 
         if (original_num_keys >= INTERNAL_NODE_MAX_CELLS) {
-            printf("Need to implement splitting internal node\n");
-            exit(EXIT_FAILURE);
+            internal_node_split_and_insert(parent_page_num, child_page_num);
+            return;
         }
 
         uint32_t right_child_page_num = *parentNode.internal_node_right_child();
+        /*
+            An internal node with a right child of INVALID_PAGE_NUM is empty
+        */
+        if (right_child_page_num == INVALID_PAGE_NUM) {
+            *parentNode.internal_node_right_child() = child_page_num;
+            return;
+        }
+
         void* right_child = this->table->pager->get_page(right_child_page_num);
         InternalNode rightChildNode;
         rightChildNode.node = (uint8_t*)right_child;
 
-        if (child_max_key > rightChildNode.get_node_max_key()) {
+        /*
+            If we are already at the max number of cells for a node, we cannot increment
+            before splitting. Incrementing without inserting a new key/child pair
+            and immediately calling internal_node_split_and_insert has the effect
+            of creating a new key at (max_cells + 1) with an uninitialized value
+        */
+        *parentNode.internal_node_num_keys() = original_num_keys + 1;
+
+
+        if (child_max_key > rightChildNode.get_node_max_key(this->table->pager)) {
             /* Replace right child */
             *parentNode.internal_node_child(original_num_keys) = right_child_page_num;
-            *parentNode.internal_node_key(original_num_keys) = rightChildNode.get_node_max_key();
+            *parentNode.internal_node_key(original_num_keys) = rightChildNode.get_node_max_key(this->table->pager);
             *parentNode.internal_node_right_child() = child_page_num;
         } else {
             /* Make room for the new cell */

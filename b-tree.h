@@ -150,7 +150,7 @@ const uint32_t INTERNAL_NODE_HEADER_SIZE = COMMON_NODE_HEADER_SIZE + INTERNAL_NO
 const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_CELL_SIZE = INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
-const uint32_t INTERNAL_NODE_MAX_CELLS = 4;
+const uint32_t INTERNAL_NODE_MAX_CELLS = 3;
 
 /*
     Internal Node Byte Map =>
@@ -195,9 +195,19 @@ public:
             printf("Tried to access child_num %d > num_keys %d\n", child_num, num_keys);
             exit(EXIT_FAILURE);
         } else if (child_num == num_keys) {
-            return internal_node_right_child();
+            uint32_t* right_child = internal_node_right_child();
+            if (*right_child == INVALID_PAGE_NUM) {
+                printf("Tried to access right child of node, but was invalid page\n");
+                exit(EXIT_FAILURE);
+            }
+            return right_child;
         } else {
-            return (uint32_t*)internal_node_cell_ptr(child_num);
+            uint32_t* child = (uint32_t*)internal_node_cell_ptr(child_num);
+            if (*child == INVALID_PAGE_NUM) {
+                printf("Tried to access child %d of node, but was invalid page\n", child_num);
+                exit(EXIT_FAILURE);
+            }
+            return child;
         }
     }
 
@@ -219,10 +229,26 @@ public:
         return 0;
     }
 
+    uint32_t get_node_max_key(Pager* pager) {
+        if (get_node_type() == NODE_LEAF) {
+            return *leaf_node_key(*leaf_node_num_cells() - 1);
+        }
+        void* right_child = pager->get_page(*internal_node_right_child());
+        InternalNode rightChild;
+        rightChild.node = (uint8_t*)right_child;
+        return rightChild.get_node_max_key(pager);
+    }
+
     void initialize_internal_node() {
         set_node_type(NODE_INTERNAL);
         set_node_root(false);
         *internal_node_num_keys() = 0;
+        /*
+            Necessary because the root page number is 0; by not initializing an internal 
+            node's right child to an invalid page number when initializing the node, we may
+            end up with 0 as the node's right child, which makes the node a parent of the root
+        */
+        *internal_node_right_child() = INVALID_PAGE_NUM;
     }
 
     void indent(uint32_t level) {
@@ -251,16 +277,18 @@ public:
                 num_keys = *node.internal_node_num_keys();
                 indent(indentation_level);
                 printf("- internal (size %d)\n", num_keys);
-                for (uint32_t i = 0; i < num_keys; i++) {
-                    child = *node.internal_node_child(i);
+                if (num_keys > 0) {
+                    for (uint32_t i = 0; i < num_keys; i++) {
+                    child = *internal_node_child(i);
                     print_tree(pager, child, indentation_level + 1);
 
                     indent(indentation_level + 1);
-                    printf("- key %d\n", *node.internal_node_key(i));
+                    printf("- key %d\n", *internal_node_key(i));
                 }
-                child = *node.internal_node_right_child();
-                print_tree(pager, child, indentation_level + 1);
-            break;
+                    child = *internal_node_right_child();
+                    print_tree(pager, child, indentation_level + 1);
+                }
+                break;
         }
     }
 };
