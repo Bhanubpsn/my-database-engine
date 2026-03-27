@@ -1,3 +1,5 @@
+#include <grpcpp/grpcpp.h>
+#include "database.grpc.pb.h" // Generated from proto
 #include <iostream>
 #include "types.h"
 #include "inputBuffer.h"
@@ -237,69 +239,158 @@ public:
     }
 };  
 
+// ProtoBuffer 
+class DatabaseEngineImpl final : public bpsndb::DatabaseEngine::Service {
+    Table* table;
+public:
+    DatabaseEngineImpl(Table* t) : table(t) {}
+    grpc::Status Execute(grpc::ServerContext* context, const bpsndb::CommandRequest* request, bpsndb::CommandResponse* response) override {
+        
+        string statement_text = request->statement();
+        
+        InputBuffer input_buffer;
+        input_buffer.buffer = (char*)statement_text.c_str();
+        input_buffer.input_length = statement_text.length();
+
+        if (input_buffer.buffer[0] == '.') {
+            switch (input_buffer.do_meta_command(table)) {
+                case (META_COMMAND_SUCCESS):
+                    return grpc::Status::OK;
+                case (META_COMMAND_UNRECOGNIZED_COMMAND): {
+                    std::string msg = "Unrecognized command: " + std::string(input_buffer.buffer);
+                    response->set_message(msg); 
+                    return grpc::Status::OK;
+                }
+            }
+        }
+
+        Statement statement;
+        switch (statement.prepare_statement(input_buffer.buffer)) {
+            case PREPARE_SUCCESS:
+                break;
+            default:
+                response->set_status(bpsndb::CommandResponse::FAILURE);
+                response->set_message("Syntax Error");
+                return grpc::Status::OK;
+        }
+
+        if (statement.type == STATEMENT_SELECT) {
+            Cursor* cursor = new Cursor();
+            cursor->table_start(table);
+            while (!(cursor->end_of_table)) {
+                Row row;
+                row.deserialize_row(cursor_value(cursor));
+                row.print_row();
+                
+                // Map C++ Row to Proto Row
+                bpsndb::Row* proto_row = response->add_rows();
+                proto_row->set_id(row.id);
+                proto_row->set_username(row.username);
+                proto_row->set_email(row.email);
+
+                cursor->cursor_advance();
+            }
+            delete cursor;
+            response->set_status(bpsndb::CommandResponse::SUCCESS);
+            response->set_message("Select Executed");
+        }  else {
+            // INSERT, UPDATE, DELETE
+            ExecuteResult result = statement.execute_statement(table);
+            if (result == EXECUTE_SUCCESS) {
+                cout<<"In the Primary DB"<<endl;
+                response->set_status(bpsndb::CommandResponse::SUCCESS);
+                response->set_message("Executed successfully");
+            } else {
+                response->set_status(bpsndb::CommandResponse::FAILURE);
+                response->set_message("Execution failed or key error");
+            }
+        }
+
+        return grpc::Status::OK;
+    }
+};
+
+void RunServer(Table* table, string port) {
+    string server_address("0.0.0.0:" + port);
+    DatabaseEngineImpl service(table);
+
+    grpc::ServerBuilder builder;
+
+    builder.SetMaxReceiveMessageSize(1024 * 1024 * 50); 
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+    builder.RegisterService(&service);
+
+    unique_ptr<grpc::Server> server(builder.BuildAndStart());
+    cout << "C++ Engine listening on " << server_address << endl;
+    server->Wait();
+}
+
 // the input arguements are always argc = x + 1, 1 becuase of the run command of the cpp/c file and then the input arguement array
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        printf("Must supply a database filename.\n");
+    if (argc < 3) {
+        printf("Must supply a database filename and port\n");
         exit(EXIT_FAILURE);
     }
 
     char* filename = argv[1];
+    string port = argv[2];
     Table* table = new Table(filename);
-    InputBuffer* inputBuffer = new InputBuffer();
+
+    RunServer(table, port);
+
+    // InputBuffer* inputBuffer = new InputBuffer();
 
     // Continously reading the db input
-    while(1) {
-        inputBuffer->print_prompt();
-        inputBuffer->read_input();
+    // while(1) {
+    //     inputBuffer->print_prompt();
+    //     inputBuffer->read_input();
 
-        Statement statement;
+    //     Statement statement;
 
-        if (inputBuffer->buffer[0] == '.') {
-            switch (inputBuffer->do_meta_command(table)) {
-                case (META_COMMAND_SUCCESS):
-                    continue;
-                case (META_COMMAND_UNRECOGNIZED_COMMAND):
-                    printf("Unrecognized command '%s'\n", inputBuffer->buffer);
-                continue;
-            }
-        }
+    //     if (inputBuffer->buffer[0] == '.') {
+    //         switch (inputBuffer->do_meta_command(table)) {
+    //             case (META_COMMAND_SUCCESS):
+    //                 continue;
+    //             case (META_COMMAND_UNRECOGNIZED_COMMAND):
+    //                 printf("Unrecognized command '%s'\n", inputBuffer->buffer);
+    //             continue;
+    //         }
+    //     }
 
-        switch (statement.prepare_statement(inputBuffer->buffer)) {
-            case (PREPARE_SUCCESS):
-                break;
-            case (PREPARE_SYNTAX_ERROR):
-                printf("Syntax error. Could not parse statement.\n");
-                continue;
-            case (PREPARE_UNRECOGNIZED_STATEMENT):
-                printf("Unrecognized keyword at start of '%s'.\n",inputBuffer->buffer);
-                continue;
-            case (PREPARE_STRING_TOO_LONG):
-                printf("String is too long.\n");
-                continue;
-            case (PREPARE_NEGATIVE_ID):
-                printf("ID must be positive.\n");
-                continue;
-        }
+    //     switch (statement.prepare_statement(inputBuffer->buffer)) {
+    //         case (PREPARE_SUCCESS):
+    //             break;
+    //         case (PREPARE_SYNTAX_ERROR):
+    //             printf("Syntax error. Could not parse statement.\n");
+    //             continue;
+    //         case (PREPARE_UNRECOGNIZED_STATEMENT):
+    //             printf("Unrecognized keyword at start of '%s'.\n",inputBuffer->buffer);
+    //             continue;
+    //         case (PREPARE_STRING_TOO_LONG):
+    //             printf("String is too long.\n");
+    //             continue;
+    //         case (PREPARE_NEGATIVE_ID):
+    //             printf("ID must be positive.\n");
+    //             continue;
+    //     }
 
-        switch (statement.execute_statement(table)) {
-            case (EXECUTE_SUCCESS):
-                printf("Executed.\n");
-                break;
-            case (EXECUTE_DUPLICATE_KEY):
-                printf("Error: Duplicate key.\n");
-                break;
-            case (EXECUTE_TABLE_FULL):
-                printf("Error: Table full.\n");
-                break;
-            case (EXECUTE_KEY_NOT_FOUND):
-                printf("Can't find the key to update.\n");
-                break;
-        }
-    }
+    //     switch (statement.execute_statement(table)) {
+    //         case (EXECUTE_SUCCESS):
+    //             printf("Executed.\n");
+    //             break;
+    //         case (EXECUTE_DUPLICATE_KEY):
+    //             printf("Error: Duplicate key.\n");
+    //             break;
+    //         case (EXECUTE_TABLE_FULL):
+    //             printf("Error: Table full.\n");
+    //             break;
+    //         case (EXECUTE_KEY_NOT_FOUND):
+    //             printf("Can't find the key to update.\n");
+    //             break;
+    //     }
+    // }
 
     // Free up the heap
-    delete inputBuffer;
     delete table;
 
     // To tell the shell that the program executed correctly, or else it would be anything other than 0.
