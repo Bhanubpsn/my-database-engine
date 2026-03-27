@@ -2,3 +2,20 @@
 .prettierignore
 *.exe
 .vscode
+
+# Protobuf Generated Artifacts
+*.pb.go
+*.pb.cc
+*.pb.h
+
+# Database Files
+*.db
+
+# Logs
+*.log
+
+# Binaries
+db-engine/db_engine
+
+# OS-specific
+.DS_Store
