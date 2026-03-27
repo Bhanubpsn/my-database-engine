@@ -22,16 +22,18 @@ typedef enum {
     PREPARE_NEGATIVE_ID,
 } PrepareResult;
 
-// Actual SQL commands, for now allowing only insert and select for the sake of checking wether it is working or not
+// Actual SQL commands, for now allowing only insert, select, update for the sake of checking wether it is working or not
 typedef enum { 
     STATEMENT_INSERT, 
-    STATEMENT_SELECT 
+    STATEMENT_SELECT,
+    STATEMENT_UPDATE,
 } StatementType;
 
 typedef enum { 
     EXECUTE_SUCCESS, 
     EXECUTE_TABLE_FULL,
     EXECUTE_DUPLICATE_KEY,
+    EXECUTE_KEY_NOT_FOUND,
 } ExecuteResult;
 
 // B-Tree Nodes 
