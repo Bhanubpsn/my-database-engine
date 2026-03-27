@@ -56,10 +56,10 @@ go mod tidy
 </pre>
 
 <h3>Running the Cluster</h3>
-<p>The system includes a <code>run_cluster.sh</code> script that handles compilation, synchronization, and node launching in one command:</p>
+<p>The system includes a <code>startdb.sh</code> script that handles compilation, synchronization, and node launching in one command:</p>
 <pre>
-chmod +x run_cluster.sh
-./run_cluster.sh
+chmod +x startdb.sh
+./startdb.sh
 </pre>
 
 <hr />
@@ -105,7 +105,7 @@ chmod +x run_cluster.sh
   <li><code>/db-engine</code>: C++ B+ Tree source code and gRPC Server.</li>
   <li><code>/proto</code>: Service definitions (.proto files).</li>
   <li><code>main.go</code>: Go Orchestrator and Cluster Controller.</li>
-  <li><code>run_cluster.sh</code>: Master automation script.</li>
+  <li><code>startdb.sh</code>: Master automation script.</li>
 </ul>
 
 <div align="center">
