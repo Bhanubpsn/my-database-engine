@@ -81,6 +81,7 @@ sleep 2
 # --- 6. Execution ---
 echo -e "\n${GREEN}${BOLD}==================================================${NC}"
 echo -e "${GREEN}${BOLD}        DISTRIBUTED GO ORCHESTRATOR ACTIVE        ${NC}"
+echo -e "${GREEN}${BOLD}           BHANU'S DISTRIBUTED DB STARTED         ${NC}"
 echo -e "${GREEN}${BOLD}==================================================${NC}\n"
 
 # Run Go Orchestrator
